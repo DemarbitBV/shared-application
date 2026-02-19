@@ -11,7 +11,7 @@ namespace Demarbit.Shared.Application.Dispatching.Services;
 /// Default dispatcher implementation. Dispatches requests through the pipeline to their handlers,
 /// and publishes domain events to registered event handlers within isolated DI scopes.
 /// </summary>
-internal sealed class Dispatcher(
+internal sealed partial class Dispatcher(
     IServiceProvider serviceProvider,
     IScopeContextPropagator? scopeContextPropagator,
     ILogger<Dispatcher> logger
@@ -92,8 +92,7 @@ internal sealed class Dispatcher(
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Event handler failed for {EventType} (EventId: {EventId})",
-                    domainEvent.EventType, domainEvent.EventId);
+                LogEventHandlerFailedForEventTypeEventId(logger, ex, domainEvent.EventType, domainEvent.EventId);
 
                 await scopedUnitOfWork.RollbackTransactionAsync(cancellationToken);
                 scopedUnitOfWork.GetAndClearPendingEvents();
@@ -101,4 +100,7 @@ internal sealed class Dispatcher(
             }
         }
     }
+
+    [LoggerMessage(LogLevel.Error, "Event handler failed for {EventType} (EventId: {EventId})")]
+    static partial void LogEventHandlerFailedForEventTypeEventId(ILogger<Dispatcher> logger, Exception ex, string eventType, Guid eventId);
 }

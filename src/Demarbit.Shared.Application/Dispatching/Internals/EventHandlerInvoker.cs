@@ -10,6 +10,9 @@ namespace Demarbit.Shared.Application.Dispatching.Internals;
 /// </summary>
 internal abstract class EventHandlerInvoker
 {
+    // Prevent derivation outside this assembly — this is a closed hierarchy.
+    private protected EventHandlerInvoker() { }
+    
     public abstract Task InvokeAsync(
         IDomainEvent domainEvent,
         IServiceProvider serviceProvider,

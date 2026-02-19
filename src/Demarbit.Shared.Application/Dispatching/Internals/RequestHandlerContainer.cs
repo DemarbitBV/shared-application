@@ -9,6 +9,9 @@ namespace Demarbit.Shared.Application.Dispatching.Internals;
 /// </summary>
 internal abstract class RequestHandlerBase
 {
+    // Prevent derivation outside this assembly — this is a closed hierarchy.
+    private protected RequestHandlerBase() { }
+    
     public abstract Task<object?> HandleAsync(
         object request,
         IServiceProvider serviceProvider,
