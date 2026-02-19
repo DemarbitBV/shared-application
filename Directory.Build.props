@@ -1,0 +1,59 @@
+<Project>
+
+  <!-- ====================================================================
+       Shared build properties for all projects in the solution.
+       ==================================================================== -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <!-- ====================================================================
+       Versioning (MinVer — derived from git tags like v1.0.0)
+       ==================================================================== -->
+  <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('src'))">
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+  </PropertyGroup>
+
+  <!-- ====================================================================
+       NuGet Package Metadata (src/ projects only)
+       ==================================================================== -->
+  <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('src'))">
+    <Authors>Nicolas Demarbaix</Authors>
+    <Company>Demarbit BV</Company>
+    <Copyright>© 2026 Demarbit BV</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/DemarbitBV/shared-application</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/DemarbitBV/shared-application</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
+    <Description>Opinionated shared application layer for .NET projects following Clean Architecture principles. Provides a lightweight CQRS dispatcher with pipeline behaviors (logging, validation, transactions), structured exceptions, and common application models.</Description>
+    <PackageTags>cqrs;clean-architecture;dispatcher;pipeline;validation;dotnet;csharp</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- ====================================================================
+       SourceLink & Deterministic Builds (src/ projects only)
+       ==================================================================== -->
+  <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('src'))">
+    <RepositoryUrl>https://github.com/DemarbitBV/shared-application</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!-- ====================================================================
+       Test project defaults
+       ==================================================================== -->
+  <PropertyGroup Condition="$(MSBuildProjectFullPath.Contains('tests'))">
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+
+</Project>

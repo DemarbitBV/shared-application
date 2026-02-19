@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Demarbit.Shared.Application/Demarbit.Shared.Application.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Demarbit.Shared.Application.Tests/Demarbit.Shared.Application.Tests.csproj" />
+  </Folder>
+</Solution>

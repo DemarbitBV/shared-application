@@ -1,0 +1,235 @@
+# ============================================================================
+# Demarbit.Shared.Application — CI/CD Pipeline
+# ============================================================================
+# Triggers on push to main. Builds, tests (with coverage), runs SonarCloud
+# analysis, and publishes to NuGet if all checks pass.
+#
+# Required GitHub Secrets:
+#   SONAR_TOKEN        — SonarCloud authentication token
+#   NUGET_API_KEY      — NuGet.org API key
+#
+# Versioning: Uses MinVer — version is derived from git tags.
+#   - Tag v1.0.0 on main → publishes 1.0.0
+#   - Commits after tag   → pre-release (1.0.1-alpha.0.1, etc.)
+#   - To release: git tag v1.x.x && git push --tags
+# ============================================================================
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  DOTNET_NOLOGO: true 
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  SOLUTION_PATH: "Demarbit.Shared.Application.slnx"
+  SONAR_PROJECT_KEY: "DemarbitBV_shared-application"       # Update after SonarCloud setup
+  SONAR_ORGANIZATION: "demarbit-bv"                     # Update after SonarCloud setup
+
+jobs:
+  # ==========================================================================
+  # Build, Test & Analyze
+  # ==========================================================================
+  build-test-analyze:
+    name: Build, Test & Analyze
+    runs-on: ubuntu-latest
+
+    steps:
+      # ----------------------------------------------------------------------
+      # Setup
+      # ----------------------------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for MinVer + SonarCloud
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Setup Java 17 (required by SonarCloud scanner)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      # ----------------------------------------------------------------------
+      # Restore
+      # ----------------------------------------------------------------------
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      # ----------------------------------------------------------------------
+      # Determine Version (MinVer)
+      # ----------------------------------------------------------------------
+      - name: Determine version
+        id: version
+        run: |
+          dotnet tool install --global minver-cli
+          VERSION=$(minver --tag-prefix v)
+          BASE_VERSION=$(echo "$VERSION" | cut -d'-' -f1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "base_version=$BASE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "📦 Version: $VERSION (base: $BASE_VERSION)"
+
+      # ----------------------------------------------------------------------
+      # SonarCloud — Begin Analysis
+      # ----------------------------------------------------------------------
+      - name: Install SonarCloud scanner
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: SonarCloud — Begin
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          dotnet sonarscanner begin \
+            /k:"${{ env.SONAR_PROJECT_KEY }}" \
+            /o:"${{ env.SONAR_ORGANIZATION }}" \
+            /d:sonar.token="${SONAR_TOKEN}" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" \
+            /d:sonar.coverage.exclusions="**/*Tests*/**,**/Program.cs" \
+            /d:sonar.exclusions="**/obj/**,**/bin/**,**/Migrations/**,.github/**" \
+            /v:"${{ steps.version.outputs.base_version }}"
+
+      # ----------------------------------------------------------------------
+      # Build
+      # ----------------------------------------------------------------------
+      - name: Build
+        run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
+
+      # ----------------------------------------------------------------------
+      # Test + Coverage
+      # ----------------------------------------------------------------------
+      - name: Test with coverage
+        run: |
+          dotnet test ${{ env.SOLUTION_PATH }} \
+            --configuration Release \
+            --no-build \
+            --verbosity normal \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./TestResults \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      # Generate a human-readable coverage report
+      - name: Generate coverage report
+        if: always()
+        run: |
+          dotnet tool install --global dotnet-reportgenerator-globaltool
+          reportgenerator \
+            -reports:"./TestResults/**/coverage.opencover.xml" \
+            -targetdir:"./TestResults/CoverageReport" \
+            -reporttypes:"HtmlInline_AzurePipelines;Cobertura;TextSummary"
+
+          echo "### 📊 Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          cat ./TestResults/CoverageReport/Summary.txt >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: ./TestResults/CoverageReport
+          retention-days: 30
+
+      # ----------------------------------------------------------------------
+      # SonarCloud — End Analysis
+      # ----------------------------------------------------------------------
+      - name: SonarCloud — End
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: dotnet sonarscanner end /d:sonar.token="${SONAR_TOKEN}"
+
+      # ----------------------------------------------------------------------
+      # SonarCloud Quality Gate
+      # ----------------------------------------------------------------------
+      - name: SonarCloud Quality Gate
+        uses: SonarSource/sonarqube-quality-gate-action@v1
+        timeout-minutes: 5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          scanMetadataReportFile: .sonarqube/out/.sonar/report-task.txt
+
+      # ----------------------------------------------------------------------
+      # Pack
+      # ----------------------------------------------------------------------
+      - name: Pack NuGet package
+        run: |
+          dotnet pack src/Demarbit.Shared.Application/Demarbit.Shared.Application.csproj \
+            --configuration Release \
+            --no-build \
+            --output ./nupkg
+
+          echo "### 📦 Package" >> $GITHUB_STEP_SUMMARY
+          echo "Version: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          ls -la ./nupkg/*.nupkg >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload NuGet package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: ./nupkg/*.nupkg
+          retention-days: 30
+
+  # ==========================================================================
+  # Publish to NuGet
+  # ==========================================================================
+  publish:
+    name: Publish to NuGet
+    needs: build-test-analyze
+    runs-on: ubuntu-latest
+
+    # Only publish on tagged releases (v*) pushed to main
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download NuGet package
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-package
+          path: ./nupkg
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Publish to NuGet.org
+        run: |
+          dotnet nuget push ./nupkg/*.nupkg \
+            --api-key ${{ secrets.NUGET_API_KEY }} \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate
+
+          echo "### 🚀 Published to NuGet" >> $GITHUB_STEP_SUMMARY
+          echo "Package pushed successfully." >> $GITHUB_STEP_SUMMARY
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: ./nupkg/*.nupkg

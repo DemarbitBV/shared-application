@@ -1,0 +1,16 @@
+<Project>
+
+  <!-- ====================================================================
+       Shared package references for tooling.
+       Directory.Packages.props handles version pinning if using
+       Central Package Management; otherwise these are direct references.
+       ==================================================================== -->
+
+  <!-- MinVer: automatic semantic versioning from git tags -->
+  <ItemGroup Condition="$(MSBuildProjectFullPath.Contains('src'))">
+    <PackageReference Include="MinVer" Version="6.0.0" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>
+
