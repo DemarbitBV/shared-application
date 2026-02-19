@@ -10,7 +10,7 @@ namespace Demarbit.Shared.Application.Dispatching.Behaviors;
 /// Application exceptions (extending <see cref="AppException"/>) are logged as warnings
 /// and re-thrown. Unexpected exceptions are logged as errors and wrapped in <see cref="AppException"/>.
 /// </summary>
-internal sealed class LoggingBehavior<TRequest, TResponse>(
+internal sealed partial class LoggingBehavior<TRequest, TResponse>(
     ILogger<LoggingBehavior<TRequest, TResponse>> logger
 ) : IPipelineBehavior<TRequest, TResponse>
     where TRequest : IRequest<TResponse>
@@ -23,31 +23,40 @@ internal sealed class LoggingBehavior<TRequest, TResponse>(
         var requestName = typeof(TRequest).Name;
         var sw = Stopwatch.StartNew();
 
-        logger.LogInformation("Handling {RequestName}", requestName);
-        logger.LogDebug("Request payload: {@Request}", request);
+        LogHandlingRequestName(logger, requestName);
 
         try
         {
             var response = await next(cancellationToken);
 
             sw.Stop();
-            logger.LogInformation("Handled {RequestName} in {ElapsedMs}ms", requestName, sw.ElapsedMilliseconds);
-            logger.LogDebug("Response payload: {@Response}", response);
+            LogHandledRequestNameInElapsedMs(logger, requestName, sw.ElapsedMilliseconds);
 
             return response;
         }
         catch (AppException ex)
         {
             sw.Stop();
-            logger.LogWarning(ex, "{RequestName} failed after {ElapsedMs}ms: {Message}",
-                requestName, sw.ElapsedMilliseconds, ex.Message);
+            LogRequestNameFailedAfterElapsedMsMessage(logger, ex, requestName, sw.ElapsedMilliseconds, ex.Message);
             throw;
         }
         catch (Exception ex)
         {
             sw.Stop();
-            logger.LogError(ex, "{RequestName} failed after {ElapsedMs}ms", requestName, sw.ElapsedMilliseconds);
+            LogRequestNameFailedAfterElapsedMs(logger, ex, requestName, sw.ElapsedMilliseconds);
             throw new AppException($"An unexpected error occurred executing {requestName}.", ex);
         }
     }
+
+    [LoggerMessage(LogLevel.Information, "Handling {RequestName}")]
+    static partial void LogHandlingRequestName(ILogger<LoggingBehavior<TRequest, TResponse>> logger, string requestName);
+
+    [LoggerMessage(LogLevel.Information, "Handled {RequestName} in {ElapsedMs}ms")]
+    static partial void LogHandledRequestNameInElapsedMs(ILogger<LoggingBehavior<TRequest, TResponse>> logger, string requestName, long elapsedMs);
+
+    [LoggerMessage(LogLevel.Warning, "{RequestName} failed after {ElapsedMs}ms: {Message}")]
+    static partial void LogRequestNameFailedAfterElapsedMsMessage(ILogger<LoggingBehavior<TRequest, TResponse>> logger, Exception ex, string requestName, long elapsedMs, string message);
+
+    [LoggerMessage(LogLevel.Error, "{RequestName} failed after {ElapsedMs}ms")]
+    static partial void LogRequestNameFailedAfterElapsedMs(ILogger<LoggingBehavior<TRequest, TResponse>> logger, Exception ex, string requestName, long elapsedMs);
 }

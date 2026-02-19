@@ -13,7 +13,7 @@ namespace Demarbit.Shared.Application.Dispatching.Behaviors;
 /// Non-transactional requests (e.g. queries) pass through without transaction overhead.
 /// </para>
 /// </summary>
-internal sealed class TransactionBehavior<TRequest, TResponse>(
+internal sealed partial class TransactionBehavior<TRequest, TResponse>(
     IUnitOfWork unitOfWork,
     IDispatcher dispatcher,
     ILogger<TransactionBehavior<TRequest, TResponse>> logger
@@ -31,7 +31,7 @@ internal sealed class TransactionBehavior<TRequest, TResponse>(
         }
 
         var requestName = typeof(TRequest).Name;
-        logger.LogDebug("Starting transaction for {RequestName}", requestName);
+        LogStartingTransactionForRequestName(logger, requestName);
 
         try
         {
@@ -50,22 +50,34 @@ internal sealed class TransactionBehavior<TRequest, TResponse>(
                 await dispatcher.NotifyAsync(pendingEvents, cancellationToken);
             }
 
-            logger.LogDebug("Transaction completed for {RequestName}", requestName);
+            LogTransactionCompletedForRequestName(logger, requestName);
             return response;
         }
         catch (AppException)
         {
-            logger.LogDebug("Rolling back transaction for {RequestName} due to application exception", requestName);
+            LogRollingBackTransactionForRequestNameDueToApplicationException(logger, requestName);
             await unitOfWork.RollbackTransactionAsync(cancellationToken);
             unitOfWork.GetAndClearPendingEvents();
             throw;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Rolling back transaction for {RequestName}", requestName);
+            LogRollingBackTransactionForRequestName(logger, ex, requestName);
             await unitOfWork.RollbackTransactionAsync(cancellationToken);
             unitOfWork.GetAndClearPendingEvents();
             throw new AppException($"An error occurred executing {requestName}.", ex);
         }
     }
+
+    [LoggerMessage(LogLevel.Information, "Starting transaction for {RequestName}")]
+    static partial void LogStartingTransactionForRequestName(ILogger<TransactionBehavior<TRequest, TResponse>> logger, string requestName);
+
+    [LoggerMessage(LogLevel.Information, "Transaction completed for {RequestName}")]
+    static partial void LogTransactionCompletedForRequestName(ILogger<TransactionBehavior<TRequest, TResponse>> logger, string requestName);
+
+    [LoggerMessage(LogLevel.Information, "Rolling back transaction for {RequestName} due to application exception")]
+    static partial void LogRollingBackTransactionForRequestNameDueToApplicationException(ILogger<TransactionBehavior<TRequest, TResponse>> logger, string requestName);
+
+    [LoggerMessage(LogLevel.Warning, "Rolling back transaction for {RequestName}")]
+    static partial void LogRollingBackTransactionForRequestName(ILogger<TransactionBehavior<TRequest, TResponse>> logger, Exception ex, string requestName);
 }
