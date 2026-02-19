@@ -35,9 +35,9 @@ public class EventHandlerInvokerTests
         var invoker = new EventHandlerInvoker<TestDomainEvent>();
         var domainEvent = new TestDomainEvent { Payload = "ignored" };
 
-        await invoker.InvokeAsync(domainEvent, services, CancellationToken.None);
+        var act = () => invoker.InvokeAsync(domainEvent, services, CancellationToken.None);
 
-        // No exception thrown — nothing to assert beyond survival
+        await act.Should().NotThrowAsync();
     }
 
     [Fact]

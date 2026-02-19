@@ -9,7 +9,7 @@ namespace Demarbit.Shared.Application.Tests;
 
 public class LoggingBehaviorTests
 {
-    private LoggingBehavior<TRequest, TResponse> CreateBehavior<TRequest, TResponse>()
+    private static LoggingBehavior<TRequest, TResponse> CreateBehavior<TRequest, TResponse>()
         where TRequest : IRequest<TResponse>
         => new(NullLogger<LoggingBehavior<TRequest, TResponse>>.Instance);
 
