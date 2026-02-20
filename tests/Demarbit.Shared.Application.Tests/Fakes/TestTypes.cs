@@ -1,6 +1,8 @@
 using Demarbit.Shared.Application.Dispatching.Contracts;
+using Demarbit.Shared.Application.Dispatching.Services;
 using Demarbit.Shared.Application.Exceptions;
 using Demarbit.Shared.Application.Models;
+using Demarbit.Shared.Domain.Contracts;
 using Demarbit.Shared.Domain.Models;
 
 namespace Demarbit.Shared.Application.Tests.Fakes;
@@ -146,4 +148,20 @@ public class FailingEventHandler : IEventHandler<TestDomainEvent>
 {
     public Task HandleAsync(TestDomainEvent @event, CancellationToken cancellationToken)
         => throw new InvalidOperationException("Event handler failed");
+}
+
+public class TestIdempotentEventHandler(IEventIdempotencyService idempotencyService)
+    : IdempotentEventHandler<TestDomainEvent>(idempotencyService)
+{
+    public List<string> HandledPayloads { get; } = [];
+
+    public Func<TestDomainEvent, CancellationToken, Task>? OnHandleCore { get; set; }
+
+    protected override async Task HandleCoreAsync(TestDomainEvent @event, CancellationToken cancellationToken)
+    {
+        HandledPayloads.Add(@event.Payload);
+
+        if (OnHandleCore is not null)
+            await OnHandleCore(@event, cancellationToken);
+    }
 }
